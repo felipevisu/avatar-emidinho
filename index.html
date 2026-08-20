@@ -48,25 +48,28 @@
     text-decoration: none;
   }
   #download { background: #22c55e; display: none; }
-  #saveOverlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, .85);
+  #iabBanner {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    gap: 1rem;
-    padding: 1rem;
-    z-index: 10;
+    gap: .5rem;
+    background: #fef3c7;
+    color: #92400e;
+    border-radius: 8px;
+    padding: .8rem 1rem;
+    max-width: min(92vw, 640px);
+    text-align: center;
   }
-  #saveOverlay[hidden] { display: none; }
-  #saveOverlay p { color: #fff; font-weight: bold; margin: 0; }
-  #saveOverlay img { width: min(85vw, 480px); border-radius: 8px; }
-  #saveOverlay button { background: #6b7280; }
+  #iabBanner[hidden] { display: none; }
+  #iabBanner small { opacity: .8; }
 </style>
 </head>
 <body>
+  <div id="iabBanner" hidden>
+    <span>Para baixar sua foto, abra esta página no seu navegador.</span>
+    <button id="iabOpen">🌐 Abrir no navegador</button>
+    <small id="iabHint">Se não funcionar, toque nos <b>⋯</b> no canto e escolha “Abrir no navegador”.</small>
+  </div>
   <header>
     <h1>Crie seu avatar da campanha</h1>
     <p>Envie sua foto de perfil ou tire uma nova, ajuste o enquadramento e baixe
@@ -88,12 +91,6 @@
   </div>
   <input type="file" id="fileInput" accept="image/*" hidden>
   <input type="file" id="captureInput" accept="image/*" capture="user" hidden>
-
-  <div id="saveOverlay" hidden>
-    <p>Toque e segure a imagem para salvar</p>
-    <img id="saveImg" alt="Avatar final">
-    <button id="saveClose">✖️ Fechar</button>
-  </div>
 
 <script>
 const canvas = document.getElementById('preview');
@@ -181,23 +178,29 @@ zoomSlider.oninput = () => {
 // in-app browsers (Instagram/Facebook) block blob: downloads — share or long-press instead
 const inAppBrowser = /Instagram|FBAN|FBAV|FB_IAB/i.test(navigator.userAgent);
 
+if (inAppBrowser) {
+  document.getElementById('iabBanner').hidden = false;
+  document.getElementById('iabOpen').onclick = () => {
+    const url = location.href;
+    if (/Android/i.test(navigator.userAgent)) {
+      // intent:// hands the URL to the default browser
+      location.href = 'intent://' + url.replace(/^https?:\/\//, '') +
+        '#Intent;scheme=' + location.protocol.replace(':', '') + ';end';
+    } else {
+      // iOS: x-safari- scheme opens Safari (works in most in-app webviews)
+      location.href = 'x-safari-' + url;
+    }
+  };
+}
+
 download.onclick = async e => {
   if (!currentBlob) return;
   const file = new File([currentBlob], 'avatar.png', { type: 'image/png' });
   if (navigator.canShare?.({ files: [file] })) {
     e.preventDefault();
     try { await navigator.share({ files: [file] }); } catch {} // user cancelled
-  } else if (inAppBrowser) {
-    e.preventDefault();
-    const img = document.getElementById('saveImg');
-    img.src = canvas.toDataURL('image/png');
-    document.getElementById('saveOverlay').hidden = false;
   }
   // otherwise: normal <a download> flow
-};
-
-document.getElementById('saveClose').onclick = () => {
-  document.getElementById('saveOverlay').hidden = true;
 };
 
 let dragging = false, lastX = 0, lastY = 0;
