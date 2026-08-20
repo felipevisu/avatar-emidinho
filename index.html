@@ -199,7 +199,11 @@ cameraBtn.onclick = async () => {
         const vw = video.videoWidth, vh = video.videoHeight;
         const size = Math.min(vw, vh);
         ctx.clearRect(0, 0, SIZE, SIZE);
+        ctx.save();
+        ctx.translate(SIZE, 0);
+        ctx.scale(-1, 1); // mirror like a selfie
         ctx.drawImage(video, (vw - size) / 2, (vh - size) / 2, size, size, 0, 0, SIZE, SIZE);
+        ctx.restore();
         ctx.drawImage(overlay, 0, 0, SIZE, SIZE);
       }
       camLoop = requestAnimationFrame(tick);
@@ -214,7 +218,10 @@ snapBtn.onclick = () => {
   const frame = document.createElement('canvas');
   frame.width = video.videoWidth;
   frame.height = video.videoHeight;
-  frame.getContext('2d').drawImage(video, 0, 0);
+  const fctx = frame.getContext('2d');
+  fctx.translate(frame.width, 0);
+  fctx.scale(-1, 1); // keep capture mirrored like the preview
+  fctx.drawImage(video, 0, 0);
   stopCamera();
   setPhoto(frame, frame.width, frame.height);
 };
