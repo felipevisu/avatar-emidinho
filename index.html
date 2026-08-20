@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Criador de Avatar</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    font-family: system-ui, sans-serif;
+    background: #d1d5db;
+    color: #1f2937;
+    padding: 1rem;
+    box-sizing: border-box;
+  }
+  header { text-align: center; max-width: min(92vw, 640px); }
+  header h1 { margin: 0 0 .5rem; font-size: 1.6rem; }
+  header p { margin: 0; opacity: .8; }
+  #preview {
+    width: min(92vw, 640px);
+    height: min(92vw, 640px);
+    background: #e5e7eb;
+    touch-action: none;
+    cursor: grab;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .25);
+    border-radius: 8px;
+  }
+  video {
+    width: min(92vw, 640px);
+    aspect-ratio: 1;
+    object-fit: cover;
+    display: none;
+  }
+  .zoom-row { display: none; align-items: center; gap: .5rem; width: min(92vw, 640px); }
+  .zoom-row input { flex: 1; }
+  .hint { font-size: .85rem; opacity: .7; display: none; }
+  .buttons { display: flex; gap: .5rem; flex-wrap: wrap; justify-content: center; }
+  button, a.btn {
+    font: inherit;
+    padding: .6rem 1.2rem;
+    border: none;
+    border-radius: 8px;
+    background: #3b82f6;
+    color: #fff;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  #download { background: #22c55e; display: none; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Crie seu avatar da campanha</h1>
+    <p>Envie sua foto de perfil ou tire uma nova, ajuste o enquadramento e baixe
+    sua imagem com a moldura da campanha para usar nas redes sociais.</p>
+  </header>
+  <canvas id="preview" width="1080" height="1080"></canvas>
+  <video id="video" autoplay playsinline></video>
+  <div class="zoom-row" id="zoomRow">
+    <span>Zoom</span>
+    <input type="range" id="zoomSlider" min="1" max="3" step="0.01" value="1">
+  </div>
+  <span class="hint" id="hint">Arraste a foto para ajustar o enquadramento</span>
+  <div class="buttons">
+    <button id="uploadBtn">🖼️ Enviar foto</button>
+    <button id="cameraBtn">📷 Tirar foto</button>
+    <button id="snapBtn" style="display:none">📸 Capturar</button>
+    <a id="download" class="btn" download="avatar.png">⬇️ Baixar</a>
+  </div>
+  <input type="file" id="fileInput" accept="image/*" hidden>
+
+<script>
+const canvas = document.getElementById('preview');
+const ctx = canvas.getContext('2d');
+const video = document.getElementById('video');
+const fileInput = document.getElementById('fileInput');
+const download = document.getElementById('download');
+const snapBtn = document.getElementById('snapBtn');
+const zoomSlider = document.getElementById('zoomSlider');
+
+const SIZE = 1080;
+let photo = null;   // ImageBitmap or canvas
+let pw = 0, ph = 0;
+let zoom = 1, offX = 0, offY = 0;
+
+function drawPlaceholder() {
+  ctx.fillStyle = '#e5e7eb';
+  ctx.fillRect(0, 0, SIZE, SIZE);
+  ctx.fillStyle = '#9ca3af';
+  ctx.beginPath();
+  ctx.arc(SIZE / 2, 400, 140, 0, Math.PI * 2); // head
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(SIZE / 2, 800, 240, Math.PI, 0); // shoulders
+  ctx.fill();
+  ctx.fillStyle = '#6b7280';
+  ctx.font = 'bold 44px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Sua foto aparecerá aqui', SIZE / 2, 180);
+}
+
+const overlay = new Image();
+overlay.src = 'over.png';
+overlay.onload = () => {
+  drawPlaceholder();
+  ctx.drawImage(overlay, 0, 0, SIZE, SIZE);
+};
+
+function draw() {
+  const s = (SIZE / Math.min(pw, ph)) * zoom; // cover * zoom
+  const w = pw * s, h = ph * s;
+  const maxX = (w - SIZE) / 2, maxY = (h - SIZE) / 2;
+  offX = Math.max(-maxX, Math.min(maxX, offX));
+  offY = Math.max(-maxY, Math.min(maxY, offY));
+  ctx.clearRect(0, 0, SIZE, SIZE);
+  ctx.drawImage(photo, (SIZE - w) / 2 + offX, (SIZE - h) / 2 + offY, w, h);
+  ctx.drawImage(overlay, 0, 0, SIZE, SIZE);
+  canvas.toBlob(blob => {
+    if (download.href) URL.revokeObjectURL(download.href);
+    download.href = URL.createObjectURL(blob);
+    download.style.display = 'inline-block';
+  }, 'image/png');
+}
+
+function setPhoto(source, w, h) {
+  photo = source; pw = w; ph = h;
+  zoom = 1; offX = 0; offY = 0;
+  zoomSlider.value = 1;
+  document.getElementById('zoomRow').style.display = 'flex';
+  document.getElementById('hint').style.display = 'block';
+  draw();
+}
+
+document.getElementById('uploadBtn').onclick = () => fileInput.click();
+
+fileInput.onchange = async () => {
+  const file = fileInput.files[0];
+  if (!file) return;
+  stopCamera();
+  const img = await createImageBitmap(file);
+  setPhoto(img, img.width, img.height);
+};
+
+zoomSlider.oninput = () => {
+  zoom = parseFloat(zoomSlider.value);
+  if (photo) draw();
+};
+
+let dragging = false, lastX = 0, lastY = 0;
+canvas.onpointerdown = e => {
+  if (!photo) return;
+  dragging = true;
+  lastX = e.clientX; lastY = e.clientY;
+  canvas.setPointerCapture(e.pointerId);
+};
+canvas.onpointermove = e => {
+  if (!dragging) return;
+  const scale = SIZE / canvas.clientWidth;
+  offX += (e.clientX - lastX) * scale;
+  offY += (e.clientY - lastY) * scale;
+  lastX = e.clientX; lastY = e.clientY;
+  draw();
+};
+canvas.onpointerup = canvas.onpointercancel = () => { dragging = false; };
+
+let stream = null;
+
+document.getElementById('cameraBtn').onclick = async () => {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+    video.srcObject = stream;
+    video.style.display = 'block';
+    canvas.style.display = 'none';
+    snapBtn.style.display = 'inline-block';
+  } catch (err) {
+    alert('Câmera indisponível: ' + err.message);
+  }
+};
+
+snapBtn.onclick = () => {
+  const frame = document.createElement('canvas');
+  frame.width = video.videoWidth;
+  frame.height = video.videoHeight;
+  frame.getContext('2d').drawImage(video, 0, 0);
+  stopCamera();
+  setPhoto(frame, frame.width, frame.height);
+};
+
+function stopCamera() {
+  if (stream) {
+    stream.getTracks().forEach(t => t.stop());
+    stream = null;
+  }
+  video.style.display = 'none';
+  video.srcObject = null;
+  canvas.style.display = 'block';
+  snapBtn.style.display = 'none';
+}
+</script>
+</body>
+</html>
