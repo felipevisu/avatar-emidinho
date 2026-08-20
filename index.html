@@ -205,6 +205,10 @@ download.onclick = async e => {
   if (navigator.canShare?.({ files: [file] })) {
     e.preventDefault();
     try { await navigator.share({ files: [file] }); } catch {} // user cancelled
+  } else if (inAppBrowser) {
+    // download will silently fail here — explain instead
+    e.preventDefault();
+    document.getElementById('iabDialog').showModal();
   }
   // otherwise: normal <a download> flow
 };
