@@ -32,12 +32,7 @@
     box-shadow: 0 10px 30px rgba(0, 0, 0, .25);
     border-radius: 8px;
   }
-  video {
-    width: min(92vw, 640px);
-    aspect-ratio: 1;
-    object-fit: cover;
-    display: none;
-  }
+  video { display: none; }
   .zoom-row { display: none; align-items: center; gap: .5rem; width: min(92vw, 640px); }
   .zoom-row input { flex: 1; }
   .hint { font-size: .85rem; opacity: .7; display: none; }
@@ -62,7 +57,7 @@
     sua imagem com a moldura da campanha para usar nas redes sociais.</p>
   </header>
   <canvas id="preview" width="1080" height="1080"></canvas>
-  <video id="video" autoplay playsinline></video>
+  <video id="video" autoplay muted playsinline></video>
   <div class="zoom-row" id="zoomRow">
     <span>Zoom</span>
     <input type="range" id="zoomSlider" min="1" max="3" step="0.01" value="1">
@@ -72,9 +67,11 @@
     <button id="uploadBtn">🖼️ Enviar foto</button>
     <button id="cameraBtn">📷 Tirar foto</button>
     <button id="snapBtn" style="display:none">📸 Capturar</button>
+    <button id="closeBtn" style="display:none; background:#6b7280">✖️ Fechar</button>
     <a id="download" class="btn" download="avatar.png">⬇️ Baixar</a>
   </div>
   <input type="file" id="fileInput" accept="image/*" hidden>
+  <input type="file" id="captureInput" accept="image/*" capture="user" hidden>
 
 <script>
 const canvas = document.getElementById('preview');
@@ -140,13 +137,17 @@ function setPhoto(source, w, h) {
 
 document.getElementById('uploadBtn').onclick = () => fileInput.click();
 
-fileInput.onchange = async () => {
-  const file = fileInput.files[0];
+async function loadFile(input) {
+  const file = input.files[0];
   if (!file) return;
   stopCamera();
   const img = await createImageBitmap(file);
   setPhoto(img, img.width, img.height);
-};
+  input.value = '';
+}
+
+fileInput.onchange = () => loadFile(fileInput);
+document.getElementById('captureInput').onchange = () => loadFile(document.getElementById('captureInput'));
 
 zoomSlider.oninput = () => {
   zoom = parseFloat(zoomSlider.value);
@@ -171,14 +172,39 @@ canvas.onpointermove = e => {
 canvas.onpointerup = canvas.onpointercancel = () => { dragging = false; };
 
 let stream = null;
+let camLoop = null;
+const closeBtn = document.getElementById('closeBtn');
+const uploadBtn = document.getElementById('uploadBtn');
+const cameraBtn = document.getElementById('cameraBtn');
 
-document.getElementById('cameraBtn').onclick = async () => {
+function setCameraUI(on) {
+  snapBtn.style.display = closeBtn.style.display = on ? 'inline-block' : 'none';
+  uploadBtn.style.display = cameraBtn.style.display = on ? 'none' : 'inline-block';
+  download.style.display = on || !photo ? 'none' : 'inline-block';
+}
+
+cameraBtn.onclick = async () => {
+  // getUserMedia needs secure context; over plain HTTP fall back to native camera input
+  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+    document.getElementById('captureInput').click();
+    return;
+  }
   try {
     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
     video.srcObject = stream;
-    video.style.display = 'block';
-    canvas.style.display = 'none';
-    snapBtn.style.display = 'inline-block';
+    await video.play();
+    setCameraUI(true);
+    const tick = () => {
+      if (video.videoWidth) {
+        const vw = video.videoWidth, vh = video.videoHeight;
+        const size = Math.min(vw, vh);
+        ctx.clearRect(0, 0, SIZE, SIZE);
+        ctx.drawImage(video, (vw - size) / 2, (vh - size) / 2, size, size, 0, 0, SIZE, SIZE);
+        ctx.drawImage(overlay, 0, 0, SIZE, SIZE);
+      }
+      camLoop = requestAnimationFrame(tick);
+    };
+    camLoop = requestAnimationFrame(tick);
   } catch (err) {
     alert('Câmera indisponível: ' + err.message);
   }
@@ -193,15 +219,23 @@ snapBtn.onclick = () => {
   setPhoto(frame, frame.width, frame.height);
 };
 
+closeBtn.onclick = () => {
+  stopCamera();
+  if (photo) draw();
+  else {
+    drawPlaceholder();
+    ctx.drawImage(overlay, 0, 0, SIZE, SIZE);
+  }
+};
+
 function stopCamera() {
+  if (camLoop) { cancelAnimationFrame(camLoop); camLoop = null; }
   if (stream) {
     stream.getTracks().forEach(t => t.stop());
     stream = null;
   }
-  video.style.display = 'none';
   video.srcObject = null;
-  canvas.style.display = 'block';
-  snapBtn.style.display = 'none';
+  setCameraUI(false);
 }
 </script>
 </body>
