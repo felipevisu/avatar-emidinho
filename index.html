@@ -203,49 +203,47 @@ zoomSlider.oninput = () => {
   if (photo) draw();
 };
 
-// in-app browsers (Instagram/Facebook) block blob: downloads — share or long-press instead
+// in-app browsers (Instagram/Facebook) block blob: downloads
 const inAppBrowser = /Instagram|FBAN|FBAV|FB_IAB/i.test(navigator.userAgent);
+
+function openInDefaultBrowser(url) {
+  if (/Android/i.test(navigator.userAgent)) {
+    // intent:// hands the URL to the default browser
+    location.href = 'intent://' + url.replace(/^https?:\/\//, '') +
+      '#Intent;scheme=https;end';
+  } else {
+    // iOS: x-safari- scheme opens Safari (works in most in-app webviews)
+    location.href = 'x-safari-' + url;
+  }
+}
 
 if (inAppBrowser) {
   document.getElementById('iabBanner').hidden = false;
-  document.getElementById('iabOpen').onclick = () => {
-    const url = location.href;
-    if (/Android/i.test(navigator.userAgent)) {
-      // intent:// hands the URL to the default browser
-      location.href = 'intent://' + url.replace(/^https?:\/\//, '') +
-        '#Intent;scheme=' + location.protocol.replace(':', '') + ';end';
-    } else {
-      // iOS: x-safari- scheme opens Safari (works in most in-app webviews)
-      location.href = 'x-safari-' + url;
-    }
-  };
+  document.getElementById('iabOpen').onclick = () => openInDefaultBrowser(location.href);
 }
 
 download.onclick = async e => {
   if (!currentBlob) return;
   va('event', { name: 'download', data: { inAppBrowser } });
-  const file = new File([currentBlob], 'avatar.png', { type: 'image/png' });
-  if (inAppBrowser && navigator.canShare?.({ files: [file] })) {
-    // in-app browsers block downloads; the native share sheet can still save
-    e.preventDefault();
-    try { await navigator.share({ files: [file] }); } catch {} // user cancelled
-  } else if (inAppBrowser) {
-    // downloads silently fail in in-app browsers — long-press save instead.
-    // data: URIs don't get a save menu there, so upload and show a hosted URL
+  if (inAppBrowser) {
+    // upload, then open the hosted file in the default browser;
+    // ?download=1 makes Vercel Blob serve it as attachment → instant download
     e.preventDefault();
     download.textContent = '⏳ Preparando...';
-    let src = canvas.toDataURL('image/png'); // fallback if upload fails
     try {
       const r = await fetch('/api/upload', {
         method: 'POST',
         headers: { 'Content-Type': 'image/png' },
         body: currentBlob,
       });
-      if (r.ok) src = (await r.json()).url;
-    } catch {}
+      if (!r.ok) throw new Error();
+      openInDefaultBrowser((await r.json()).url + '?download=1');
+    } catch {
+      // upload failed — long-press save on a data: image as last resort
+      document.getElementById('saveImg').src = canvas.toDataURL('image/png');
+      document.getElementById('saveOverlay').hidden = false;
+    }
     download.textContent = '⬇️ Baixar';
-    document.getElementById('saveImg').src = src;
-    document.getElementById('saveOverlay').hidden = false;
   }
   // otherwise: normal <a download> flow
 };
