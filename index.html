@@ -48,28 +48,32 @@
     text-decoration: none;
   }
   #download { background: #22c55e; display: none; }
-  #iabBanner {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: .5rem;
-    background: #fef3c7;
-    color: #92400e;
-    border-radius: 8px;
-    padding: .8rem 1rem;
-    max-width: min(92vw, 640px);
+  #iabDialog {
+    border: none;
+    border-radius: 12px;
+    padding: 1.5rem;
+    max-width: min(85vw, 420px);
     text-align: center;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, .4);
   }
-  #iabBanner[hidden] { display: none; }
-  #iabBanner small { opacity: .8; }
+  #iabDialog::backdrop { background: rgba(0, 0, 0, .6); }
+  #iabDialog h2 { margin: 0 0 .5rem; }
+  #iabDialog p { margin: 0 0 1rem; }
+  #iabDialog small { display: block; margin: .8rem 0; opacity: .7; }
+  #iabDialog #iabClose { background: #6b7280; }
 </style>
 </head>
 <body>
-  <div id="iabBanner" hidden>
-    <span>Para baixar sua foto, abra esta página no seu navegador.</span>
+  <dialog id="iabDialog">
+    <h2>⚠️ Atenção</h2>
+    <p>Você está usando o navegador embutido do Instagram, que <b>não permite
+    baixar imagens</b>. Para conseguir salvar seu avatar no celular, abra esta
+    página no seu navegador padrão (Chrome ou Safari).</p>
     <button id="iabOpen">🌐 Abrir no navegador</button>
-    <small id="iabHint">Se não funcionar, toque nos <b>⋯</b> no canto e escolha “Abrir no navegador”.</small>
-  </div>
+    <small>Se o botão não funcionar, toque nos <b>⋯</b> no canto superior
+    e escolha <b>“Abrir no navegador externo”</b>.</small>
+    <button id="iabClose">Continuar mesmo assim</button>
+  </dialog>
   <header>
     <h1>Crie seu avatar da campanha</h1>
     <p>Envie sua foto de perfil ou tire uma nova, ajuste o enquadramento e baixe
@@ -179,7 +183,9 @@ zoomSlider.oninput = () => {
 const inAppBrowser = /Instagram|FBAN|FBAV|FB_IAB/i.test(navigator.userAgent);
 
 if (inAppBrowser) {
-  document.getElementById('iabBanner').hidden = false;
+  const dialog = document.getElementById('iabDialog');
+  dialog.showModal();
+  document.getElementById('iabClose').onclick = () => dialog.close();
   document.getElementById('iabOpen').onclick = () => {
     const url = location.href;
     if (/Android/i.test(navigator.userAgent)) {
