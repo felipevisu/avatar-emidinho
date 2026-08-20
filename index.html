@@ -48,6 +48,22 @@
     text-decoration: none;
   }
   #download { background: #22c55e; display: none; }
+  #saveOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, .85);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 1rem;
+    z-index: 10;
+  }
+  #saveOverlay[hidden] { display: none; }
+  #saveOverlay p { color: #fff; font-weight: bold; margin: 0; }
+  #saveOverlay img { width: min(85vw, 480px); border-radius: 8px; }
+  #saveOverlay button { background: #6b7280; }
 </style>
 </head>
 <body>
@@ -73,6 +89,12 @@
   <input type="file" id="fileInput" accept="image/*" hidden>
   <input type="file" id="captureInput" accept="image/*" capture="user" hidden>
 
+  <div id="saveOverlay" hidden>
+    <p>Toque e segure a imagem para salvar</p>
+    <img id="saveImg" alt="Avatar final">
+    <button id="saveClose">✖️ Fechar</button>
+  </div>
+
 <script>
 const canvas = document.getElementById('preview');
 const ctx = canvas.getContext('2d');
@@ -83,6 +105,7 @@ const snapBtn = document.getElementById('snapBtn');
 const zoomSlider = document.getElementById('zoomSlider');
 
 const SIZE = 1080;
+let currentBlob = null;
 let photo = null;   // ImageBitmap or canvas
 let pw = 0, ph = 0;
 let zoom = 1, offX = 0, offY = 0;
@@ -120,6 +143,7 @@ function draw() {
   ctx.drawImage(photo, (SIZE - w) / 2 + offX, (SIZE - h) / 2 + offY, w, h);
   ctx.drawImage(overlay, 0, 0, SIZE, SIZE);
   canvas.toBlob(blob => {
+    currentBlob = blob;
     if (download.href) URL.revokeObjectURL(download.href);
     download.href = URL.createObjectURL(blob);
     download.style.display = 'inline-block';
@@ -152,6 +176,28 @@ document.getElementById('captureInput').onchange = () => loadFile(document.getEl
 zoomSlider.oninput = () => {
   zoom = parseFloat(zoomSlider.value);
   if (photo) draw();
+};
+
+// in-app browsers (Instagram/Facebook) block blob: downloads — share or long-press instead
+const inAppBrowser = /Instagram|FBAN|FBAV|FB_IAB/i.test(navigator.userAgent);
+
+download.onclick = async e => {
+  if (!currentBlob) return;
+  const file = new File([currentBlob], 'avatar.png', { type: 'image/png' });
+  if (navigator.canShare?.({ files: [file] })) {
+    e.preventDefault();
+    try { await navigator.share({ files: [file] }); } catch {} // user cancelled
+  } else if (inAppBrowser) {
+    e.preventDefault();
+    const img = document.getElementById('saveImg');
+    img.src = canvas.toDataURL('image/png');
+    document.getElementById('saveOverlay').hidden = false;
+  }
+  // otherwise: normal <a download> flow
+};
+
+document.getElementById('saveClose').onclick = () => {
+  document.getElementById('saveOverlay').hidden = true;
 };
 
 let dragging = false, lastX = 0, lastY = 0;
