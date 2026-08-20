@@ -117,6 +117,10 @@
   </div>
 
 <script>
+  window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+</script>
+<script defer src="/_vercel/insights/script.js"></script>
+<script>
 const canvas = document.getElementById('preview');
 const ctx = canvas.getContext('2d');
 const video = document.getElementById('video');
@@ -219,14 +223,27 @@ if (inAppBrowser) {
 
 download.onclick = async e => {
   if (!currentBlob) return;
+  va('event', { name: 'download', data: { inAppBrowser } });
   const file = new File([currentBlob], 'avatar.png', { type: 'image/png' });
   if (navigator.canShare?.({ files: [file] })) {
     e.preventDefault();
     try { await navigator.share({ files: [file] }); } catch {} // user cancelled
   } else if (inAppBrowser) {
-    // downloads silently fail in in-app browsers — long-press save instead
+    // downloads silently fail in in-app browsers — long-press save instead.
+    // data: URIs don't get a save menu there, so upload and show a hosted URL
     e.preventDefault();
-    document.getElementById('saveImg').src = canvas.toDataURL('image/png');
+    download.textContent = '⏳ Preparando...';
+    let src = canvas.toDataURL('image/png'); // fallback if upload fails
+    try {
+      const r = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'image/png' },
+        body: currentBlob,
+      });
+      if (r.ok) src = (await r.json()).url;
+    } catch {}
+    download.textContent = '⬇️ Baixar';
+    document.getElementById('saveImg').src = src;
     document.getElementById('saveOverlay').hidden = false;
   }
   // otherwise: normal <a download> flow
