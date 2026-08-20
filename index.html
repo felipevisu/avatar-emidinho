@@ -48,32 +48,46 @@
     text-decoration: none;
   }
   #download { background: #22c55e; display: none; }
-  #iabDialog {
-    border: none;
-    border-radius: 12px;
-    padding: 1.5rem;
-    max-width: min(85vw, 420px);
-    text-align: center;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, .4);
+  #saveOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, .85);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 1rem;
+    z-index: 10;
   }
-  #iabDialog::backdrop { background: rgba(0, 0, 0, .6); }
-  #iabDialog h2 { margin: 0 0 .5rem; }
-  #iabDialog p { margin: 0 0 1rem; }
-  #iabDialog small { display: block; margin: .8rem 0; opacity: .7; }
-  #iabDialog #iabClose { background: #6b7280; }
+  #saveOverlay[hidden] { display: none; }
+  #saveOverlay p { color: #fff; font-weight: bold; margin: 0; }
+  #saveOverlay img { width: min(85vw, 480px); border-radius: 8px; }
+  #saveOverlay button { background: #6b7280; }
+  #iabBanner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .5rem;
+    background: #fef3c7;
+    color: #92400e;
+    border-radius: 8px;
+    padding: .8rem 1rem;
+    max-width: min(92vw, 640px);
+    text-align: center;
+  }
+  #iabBanner[hidden] { display: none; }
+  #iabBanner small { opacity: .8; }
 </style>
 </head>
 <body>
-  <dialog id="iabDialog">
-    <h2>⚠️ Atenção</h2>
-    <p>Você está usando o navegador embutido do Instagram, que <b>não permite
-    baixar imagens</b>. Para conseguir salvar seu avatar no celular, abra esta
-    página no seu navegador padrão (Chrome ou Safari).</p>
+  <div id="iabBanner" hidden>
+    <span>⚠️ O navegador embutido do Instagram <b>não permite baixar imagens</b>.
+    Para salvar seu avatar, abra esta página no seu navegador padrão (Chrome ou Safari).</span>
     <button id="iabOpen">🌐 Abrir no navegador</button>
     <small>Se o botão não funcionar, toque nos <b>⋯</b> no canto superior
     e escolha <b>“Abrir no navegador externo”</b>.</small>
-    <button id="iabClose">Continuar mesmo assim</button>
-  </dialog>
+  </div>
   <header>
     <h1>Crie seu avatar da campanha</h1>
     <p>Envie sua foto de perfil ou tire uma nova, ajuste o enquadramento e baixe
@@ -95,6 +109,12 @@
   </div>
   <input type="file" id="fileInput" accept="image/*" hidden>
   <input type="file" id="captureInput" accept="image/*" capture="user" hidden>
+
+  <div id="saveOverlay" hidden>
+    <p>Toque e segure a imagem para salvar</p>
+    <img id="saveImg" alt="Avatar final">
+    <button id="saveClose">✖️ Fechar</button>
+  </div>
 
 <script>
 const canvas = document.getElementById('preview');
@@ -183,9 +203,7 @@ zoomSlider.oninput = () => {
 const inAppBrowser = /Instagram|FBAN|FBAV|FB_IAB/i.test(navigator.userAgent);
 
 if (inAppBrowser) {
-  const dialog = document.getElementById('iabDialog');
-  dialog.showModal();
-  document.getElementById('iabClose').onclick = () => dialog.close();
+  document.getElementById('iabBanner').hidden = false;
   document.getElementById('iabOpen').onclick = () => {
     const url = location.href;
     if (/Android/i.test(navigator.userAgent)) {
@@ -206,11 +224,16 @@ download.onclick = async e => {
     e.preventDefault();
     try { await navigator.share({ files: [file] }); } catch {} // user cancelled
   } else if (inAppBrowser) {
-    // download will silently fail here — explain instead
+    // downloads silently fail in in-app browsers — long-press save instead
     e.preventDefault();
-    document.getElementById('iabDialog').showModal();
+    document.getElementById('saveImg').src = canvas.toDataURL('image/png');
+    document.getElementById('saveOverlay').hidden = false;
   }
   // otherwise: normal <a download> flow
+};
+
+document.getElementById('saveClose').onclick = () => {
+  document.getElementById('saveOverlay').hidden = true;
 };
 
 let dragging = false, lastX = 0, lastY = 0;
